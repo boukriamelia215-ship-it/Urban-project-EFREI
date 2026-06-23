@@ -24,7 +24,7 @@ for r in records:
         "code_postal": fields.get("code_postal"),
         "nature_programme": fields.get("nature_prog"),
         "mode_realisation": fields.get("mode_real"),
-        "nb_logements": fields.get("nb_logements"),
+        "nb_logements": fields.get("nb_logmt_total"),
         "coord_x": geo[1],
         "coord_y": geo[0]
     })

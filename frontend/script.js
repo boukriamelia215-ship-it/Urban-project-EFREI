@@ -105,12 +105,12 @@ function buildLegend() {
 
 // ── Map init ──────────────────────────────────────────────────────────────────
 function initMap() {
-  map = L.map("map", { minZoom: 10, maxZoom: 18, zoomControl: true }).setView([48.8566, 2.3522], 12);
+  map = L.map("map", { minZoom: 10, maxZoom: 18, zoomControl: true }).setView([48.8566, 2.3522], 13);
   L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
     attribution: "© CartoDB",
     minZoom: 10, maxZoom: 18
   }).addTo(map);
-  map.setMaxBounds(L.latLngBounds([48.70, 2.05], [49.00, 2.65]));
+  map.setMaxBounds(L.latLngBounds([48.78, 2.18], [48.93, 2.48]));
   markersLayer = L.layerGroup().addTo(map);
 }
 
@@ -210,7 +210,7 @@ function openPopup(arrCode, layer) {
       <div class="popup-section">
         <div>💶 <strong>${fmt(prix?.prix_m2_median, " €/m²")}</strong> ${varTxt}</div>
         <div>📊 Ventes : ${fmt(prix?.nb_ventes)}</div>
-        <div>🏘️ Programmes sociaux : ${loge?.nb_programmes ?? "—"}</div>
+        <div>🏘️ Logements sociaux : ${loge?.part_logements_sociaux_pct != null ? loge.part_logements_sociaux_pct.toFixed(1) + "%" : "—"}</div>
       </div>
       <div class="popup-section">
         <div class="popup-subtitle">📌 Indicateurs</div>
@@ -235,26 +235,59 @@ function openPopup(arrCode, layer) {
 // ── KPIs ──────────────────────────────────────────────────────────────────────
 function updateKPIs() {
   if (!currentArr || !currentYear) return;
+
   const prix  = prixData.find(d => d.arrondissement === currentArr && d.annee === currentYear);
+  const prixPrev = prixData.find(d => d.arrondissement === currentArr && d.annee === currentYear - 1);
+
   const loge  = logData.find(d => d.arrondissement === currentArr && d.annee === currentYear) ||
                 logData.filter(d => d.arrondissement === currentArr).sort((a,b) => b.annee - a.annee)[0];
+
   const delin = delinquanceData.find(d => d.arrondissement === currentArr && d.annee === currentYear);
   const dens  = densiteData.find(d => d.arrondissement === currentArr && d.annee === currentYear);
   const ev    = espacesVertsData.find(d => d.arrondissement === currentArr);
   const air   = qualiteAirData.find(d => d.arrondissement === currentArr);
   const typo  = typologieData.find(d => d.arrondissement === currentArr && d.annee === currentYear);
 
-  kpiPrix.textContent   = fmt(prix ? Math.round(prix.prix_m2_median) : null, " €/m²");
+  const variation = prix && prixPrev
+    ? ((prix.prix_m2_median - prixPrev.prix_m2_median) / prixPrev.prix_m2_median * 100)
+    : null;
+
+  kpiPrix.innerHTML = `
+    ${fmt(prix ? Math.round(prix.prix_m2_median) : null, " €/m²")}
+    ${
+      variation != null
+        ? `<span class="kpi-delta ${variation >= 0 ? "up" : "down"}">
+            ${variation >= 0 ? "▲" : "▼"} ${Math.abs(variation).toFixed(1)}%
+          </span>`
+        : ""
+    }
+  `;
+
   kpiVentes.textContent = "Ventes : " + fmt(prix?.nb_ventes);
 
   kpiLog.innerHTML = `
-    <div class="kpi-row">🏘️ <span class="kpi-label">Programmes sociaux</span><span>${loge?.nb_programmes ?? "—"}</span></div>
+    <div class="kpi-row">🏘️ <span class="kpi-label">Logements sociaux</span><span>${loge?.part_logements_sociaux_pct != null ? loge.part_logements_sociaux_pct.toFixed(1) + "%" : "—"}</span></div>
     <div class="kpi-row">👥 <span class="kpi-label">Densité</span><span>${dens?.densite_hab_km2 ? Math.round(dens.densite_hab_km2).toLocaleString("fr-FR") + " hab/km²" : "—"}</span></div>
     <div class="kpi-row">🚓 <span class="kpi-label">Délinquance</span><span>${delin?.score_delinquance != null ? delin.score_delinquance.toFixed(1) + "/10" : "—"}</span></div>
     <div class="kpi-row">🌳 <span class="kpi-label">Espaces verts</span><span>${ev?.m2_par_habitant != null ? ev.m2_par_habitant.toFixed(1) + " m²/hab" : "—"}</span></div>
-    <div class="kpi-row">🌫️ <span class="kpi-label">NO2 (2018)</span><span>${air?.no2_moyen != null ? air.no2_moyen.toFixed(1) + " µg/m³" : "—"}</span></div>`;
+    <div class="kpi-row">🌫️ <span class="kpi-label">NO2</span><span>${air?.no2_moyen != null ? air.no2_moyen.toFixed(1) + " µg/m³" : "—"}</span></div>
+  `;
+
+  const miniSocial = document.getElementById("mini-social");
+  const miniDensite = document.getElementById("mini-densite");
+  const miniVerts = document.getElementById("mini-verts");
+  const miniAir = document.getElementById("mini-air");
+  const miniDelinquance = document.getElementById("mini-delinquance");
+  const miniTypoSummary = document.getElementById("mini-typo-summary");
+
+  if (miniSocial) miniSocial.textContent = loge?.part_logements_sociaux_pct != null ? `${loge.part_logements_sociaux_pct.toFixed(1)}%` : "—";
+  if (miniDensite) miniDensite.textContent = dens?.densite_hab_km2 ? `${Math.round(dens.densite_hab_km2).toLocaleString("fr-FR")}` : "—";
+  if (miniVerts) miniVerts.textContent = ev?.m2_par_habitant != null ? `${ev.m2_par_habitant.toFixed(1)} m²/hab` : "—";
+  if (miniAir) miniAir.textContent = air?.no2_moyen != null ? `${air.no2_moyen.toFixed(1)} µg/m³` : "—";
+  if (miniDelinquance) miniDelinquance.textContent = delin?.score_delinquance != null ? `${delin.score_delinquance.toFixed(1)}/10` : "—";
 
   const kpiTypo = document.getElementById("kpi-typo");
+
   if (kpiTypo) {
     kpiTypo.innerHTML = typo ? `
       <div class="kpi-row"><span class="kpi-label">T1</span><span>${typo.part_T1?.toFixed(1)}%</span></div>
@@ -263,8 +296,67 @@ function updateKPIs() {
       <div class="kpi-row"><span class="kpi-label">T4+</span><span>${typo.part_T4?.toFixed(1)}%</span></div>
     ` : "—";
   }
-}
 
+  if (miniTypoSummary && typo) {
+    const parts = [
+      { label: "T1", value: typo.part_T1 },
+      { label: "T2", value: typo.part_T2 },
+      { label: "T3", value: typo.part_T3 },
+      { label: "T4+", value: typo.part_T4 }
+    ];
+
+    const dominant = parts.sort((a, b) => b.value - a.value)[0];
+    miniTypoSummary.textContent = `${dominant.label} dominant`;
+  }
+
+  const insightText = document.getElementById("insight-text");
+
+  if (insightText) {
+    const priceLabel = prix?.prix_m2_median
+      ? `${Math.round(prix.prix_m2_median).toLocaleString("fr-FR")} €/m²`
+      : "donnée indisponible";
+
+    const airLabel = air?.no2_moyen != null
+      ? air.no2_moyen < 25 ? "bonne qualité de l’air" : air.no2_moyen < 40 ? "qualité de l’air modérée" : "qualité de l’air dégradée"
+      : "qualité de l’air non disponible";
+
+    const greenLabel = ev?.m2_par_habitant != null
+      ? ev.m2_par_habitant > 10 ? "fort accès aux espaces verts" : ev.m2_par_habitant > 5 ? "accès correct aux espaces verts" : "faible accès aux espaces verts"
+      : "espaces verts non disponibles";
+
+    const trendLabel = variation != null
+      ? variation >= 0
+        ? `une hausse de <strong>+${variation.toFixed(1)}%</strong> par rapport à ${currentYear - 1}`
+        : `une baisse de <strong>${variation.toFixed(1)}%</strong> par rapport à ${currentYear - 1}`
+      : "une évolution annuelle non disponible";
+
+    insightText.innerHTML = `
+      <p><strong>${getArrLabel(currentArr)}</strong> affiche un prix médian de <strong>${priceLabel}</strong>.</p>
+      <p>📈 Le marché montre ${trendLabel}.</p>
+      <p>🌳 Le territoire présente un <strong>${greenLabel}</strong>.</p>
+      <p>🌫️ L’indicateur NO2 signale une <strong>${airLabel}</strong>.</p>
+    `;
+  }
+
+  const rankingContent = document.getElementById("ranking-content");
+
+  if (rankingContent) {
+    const ranking = prixData
+      .filter(d => d.annee === currentYear && d.prix_m2_median)
+      .sort((a, b) => b.prix_m2_median - a.prix_m2_median);
+
+    const rank = ranking.findIndex(d => d.arrondissement === currentArr) + 1;
+
+    rankingContent.innerHTML = `
+      <div class="rank-big">#${rank}</div>
+      <div>
+        <strong>${getArrLabel(currentArr)}</strong><br>
+        est le <strong>${rank}e arrondissement</strong>
+        le plus cher de Paris en ${currentYear}.
+      </div>
+    `;
+  }
+}
 // ── Graphique évolution ───────────────────────────────────────────────────────
 function updateChart() {
   if (!currentArr) return;
@@ -337,7 +429,7 @@ async function runComparison() {
         <table class="compare-table">
           ${row("Prix/m²", a.prix?.prix_m2_median ? Math.round(a.prix.prix_m2_median) : null, b.prix?.prix_m2_median ? Math.round(b.prix.prix_m2_median) : null, " €")}
           ${row("Ventes", a.prix?.nb_ventes, b.prix?.nb_ventes)}
-          ${row("Programmes soc.", a.logements_sociaux?.nb_programmes, b.logements_sociaux?.nb_programmes)}
+          ${row("Logements sociaux %", a.logements_sociaux?.part_logements_sociaux_pct, b.logements_sociaux?.part_logements_sociaux_pct, "%")}
           ${row("Densité hab/km²", a.densite?.densite_hab_km2 ? Math.round(a.densite.densite_hab_km2) : null, b.densite?.densite_hab_km2 ? Math.round(b.densite.densite_hab_km2) : null)}
           ${row("Délinquance /10", a.delinquance?.score_delinquance, b.delinquance?.score_delinquance)}
           ${row("Espaces verts m²/hab", a.espaces_verts?.m2_par_habitant, b.espaces_verts?.m2_par_habitant)}
@@ -496,7 +588,7 @@ async function main() {
   }).filter(Boolean).sort((a,b) => a.code - b.code);
 
   prixData        = prixRaw.map(d => ({ arrondissement: parseInt(d.arrondissement), annee: parseInt(d.annee), prix_m2_median: Number(d.prix_m2_median), nb_ventes: Number(d.nb_ventes) })).filter(d => !isNaN(d.arrondissement));
-  logData         = logRaw.map(d => ({ arrondissement: parseInt(d.arrondissement), annee: parseInt(d.annee), nb_programmes: Number(d.nb_programmes) })).filter(d => !isNaN(d.arrondissement));
+  logData         = logRaw.map(d => ({ arrondissement: parseInt(d.arrondissement), annee: parseInt(d.annee), nb_programmes: Number(d.nb_programmes), part_logements_sociaux_pct: Number(d.part_logements_sociaux_pct) })).filter(d => !isNaN(d.arrondissement));
   delinquanceData = delinRaw.map(d => ({ arrondissement: parseInt(d.arrondissement), annee: parseInt(d.annee), score_delinquance: Number(d.score_delinquance) })).filter(d => !isNaN(d.arrondissement));
   densiteData     = densRaw.map(d => ({ arrondissement: parseInt(d.arrondissement), annee: parseInt(d.annee), densite_hab_km2: Number(d.densite_hab_km2) })).filter(d => !isNaN(d.arrondissement));
   espacesVertsData = evRaw.map(d => ({ arrondissement: parseInt(d.arrondissement), m2_par_habitant: Number(d.m2_par_habitant), superficie_totale_m2: Number(d.superficie_totale_m2) })).filter(d => !isNaN(d.arrondissement));
