@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query, Header, HTTPException, Request
+﻿from fastapi import FastAPI, Query, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -31,7 +31,9 @@ API_KEY = "urban-data-explorer-2024"
 
 
 def load_gold(name: str):
-    return pd.read_csv(GOLD / name)
+    df = pd.read_csv(GOLD / name)
+    df = df.astype(object).where(pd.notnull(df), None)
+    return df
 
 
 def check_api_key(x_api_key: str = Header(None)):
