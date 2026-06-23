@@ -3,144 +3,353 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
   <title>Urban Data Explorer — Paris</title>
+
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
 <div class="app-container">
 
-  <!-- HEADER -->
+  <!-- HEADER PREMIUM -->
   <header class="app-header">
+
     <div class="logo-block">
       <div class="logo-square">UD</div>
-      <span class="title">URBAN DATA EXPLORER</span>
+      <div>
+        <div class="title">URBAN DATA EXPLORER</div>
+        <div class="subtitle">Paris Real Estate Intelligence Platform</div>
+      </div>
     </div>
+
     <div class="header-center">
-      <button class="mode-btn active" id="btn-explore" onclick="setMode('explore')">🗺 Explorer</button>
-      <button class="mode-btn" id="btn-compare" onclick="setMode('compare')">⚖️ Comparer</button>
-      <button class="mode-btn" id="btn-timeline" onclick="setMode('timeline')">▶ Timeline</button>
+      <button class="mode-btn active" id="btn-explore" onclick="setMode('explore')">
+        🗺 Explorer
+      </button>
+
+      <button class="mode-btn" id="btn-compare" onclick="setMode('compare')">
+        ⚖ Comparer
+      </button>
+
+      <button class="mode-btn" id="btn-timeline" onclick="setMode('timeline')">
+        ▶ Timeline
+      </button>
     </div>
+
     <div class="header-right">
-      <div class="header-dot"></div>
-      <span>Paris · Données immobilières</span>
+      <div class="status-live">
+        <span class="live-dot"></span>
+        Données temps réel
+      </div>
     </div>
+
   </header>
 
   <!-- MAIN -->
   <main class="layout">
 
-    <!-- CARTE (plein écran, en arrière-plan) -->
+    <!-- CARTE PLEIN ÉCRAN -->
     <section class="map-panel">
       <div id="map"></div>
-      <!-- Légende choroplèthe -->
+
       <div id="legend" class="map-legend" style="display:none">
-        <div class="legend-title">Prix/m²</div>
+        <div class="legend-title">Prix/m² médian</div>
         <div class="legend-items" id="legend-items"></div>
+      </div>
+
+      <div class="map-floating-title">
+        <span>Carte choroplèthe</span>
+        <strong>Prix immobilier par arrondissement</strong>
       </div>
     </section>
 
-    <!-- PANNEAU FLOTTANT -->
+    <!-- PANNEAU PRINCIPAL -->
     <section class="left-panel">
 
       <!-- MODE EXPLORER -->
       <div id="panel-explore">
-        <div class="control-block">
-          <label class="control-label">Arrondissement</label>
-          <select id="arr-select" class="select-input"></select>
-        </div>
-        <div class="control-block year-block">
-          <label class="control-label">Année</label>
-          <div class="year-header">
-            <button id="year-prev" class="year-arrow">&#8249;</button>
-            <span id="year-display" class="year-display">—</span>
-            <button id="year-next" class="year-arrow">&#8250;</button>
+
+        <!-- HERO DASHBOARD -->
+        <div class="hero-dashboard">
+          <div class="hero-kicker">Dashboard immobilier Paris</div>
+
+          <div class="hero-title">
+            Paris Real Estate Intelligence
           </div>
-          <input type="range" id="year-slider" min="2000" max="2025" step="1" value="2025" />
+
+          <div class="hero-subtitle">
+            Explorer, comprendre et comparer les dynamiques du logement arrondissement par arrondissement.
+          </div>
+
+          <div class="hero-stats">
+
+            <div class="hero-stat">
+              <span class="hero-number">20</span>
+              <span class="hero-label">Arrondissements</span>
+            </div>
+
+            <div class="hero-stat">
+              <span class="hero-number">8</span>
+              <span class="hero-label">Indicateurs</span>
+            </div>
+
+            <div class="hero-stat">
+              <span class="hero-number">2020–24</span>
+              <span class="hero-label">Historique</span>
+            </div>
+
+          </div>
         </div>
 
-        <!-- Choroplèthe switch -->
-        <div class="control-block">
-          <label class="control-label">Couleur carte</label>
-          <div class="toggle-group">
-            <button class="toggle-btn active" id="choro-prix" onclick="setChoropleth('prix')">Prix/m²</button>
-            <button class="toggle-btn" id="choro-arr" onclick="setChoropleth('arr')">Arrondissement</button>
+        <!-- CONTRÔLES -->
+        <div class="control-grid">
+
+          <div class="control-block">
+            <label class="control-label">Arrondissement</label>
+            <select id="arr-select" class="select-input"></select>
           </div>
+
+          <div class="control-block year-block">
+            <label class="control-label">Année d’analyse</label>
+
+            <div class="year-header">
+              <button id="year-prev" class="year-arrow">&#8249;</button>
+              <span id="year-display" class="year-display">—</span>
+              <button id="year-next" class="year-arrow">&#8250;</button>
+            </div>
+
+            <input type="range" id="year-slider" min="2000" max="2025" step="1" value="2025" />
+          </div>
+
+          <div class="control-block">
+            <label class="control-label">Couleur de la carte</label>
+
+            <div class="toggle-group">
+              <button class="toggle-btn active" id="choro-prix" onclick="setChoropleth('prix')">
+                Prix/m²
+              </button>
+
+              <button class="toggle-btn" id="choro-arr" onclick="setChoropleth('arr')">
+                Arrondissement
+              </button>
+            </div>
+          </div>
+
         </div>
 
         <div class="divider"></div>
 
-        <div class="kpi-block">
-          <div class="kpi-card">
-            <span class="kpi-label">Prix/m² médian</span>
+        <!-- KPI PRINCIPAL -->
+        <div class="kpi-main-card">
+          <div>
+            <span class="kpi-eyebrow">💰 Prix/m² médian</span>
             <div id="kpi-prix" class="kpi-value">—</div>
             <div id="kpi-ventes" class="kpi-sub">Ventes : —</div>
           </div>
-          <div class="kpi-card">
-            <span class="kpi-label">Indicateurs territoriaux</span>
-            <div id="kpi-log">
-              <div class="kpi-row">🏘️ <span class="kpi-label">Programmes sociaux</span><span>—</span></div>
-              <div class="kpi-row">👥 <span class="kpi-label">Densité</span><span>—</span></div>
-              <div class="kpi-row">🚓 <span class="kpi-label">Délinquance</span><span>—</span></div>
-              <div class="kpi-row">🌳 <span class="kpi-label">Espaces verts</span><span>—</span></div>
-              <div class="kpi-row">🌫️ <span class="kpi-label">NO2 (2018)</span><span>—</span></div>
-            </div>
-          </div>
-          <div class="kpi-card">
-            <span class="kpi-label">🏷️ Typologie des logements</span>
-            <div id="kpi-typo">—</div>
-          </div>
-          <!-- Graphique évolution -->
-          <div class="kpi-card">
-            <span class="kpi-label">Évolution prix/m²</span>
-            <canvas id="chart-evolution" height="120"></canvas>
+
+          <div class="kpi-badge">
+            LIVE API
           </div>
         </div>
+
+        <!-- KPI INDICATEURS -->
+        <div class="kpi-grid">
+
+          <div class="mini-kpi-card">
+            <div class="mini-kpi-icon">🏘️</div>
+            <div>
+              <span class="mini-kpi-label">Social</span>
+              <strong id="mini-social">—</strong>
+            </div>
+          </div>
+
+          <div class="mini-kpi-card">
+            <div class="mini-kpi-icon">👥</div>
+            <div>
+              <span class="mini-kpi-label">Densité</span>
+              <strong id="mini-densite">—</strong>
+            </div>
+          </div>
+
+          <div class="mini-kpi-card">
+            <div class="mini-kpi-icon">🌳</div>
+            <div>
+              <span class="mini-kpi-label">Espaces verts</span>
+              <strong id="mini-verts">—</strong>
+            </div>
+          </div>
+
+          <div class="mini-kpi-card">
+            <div class="mini-kpi-icon">🌫️</div>
+            <div>
+              <span class="mini-kpi-label">Qualité air</span>
+              <strong id="mini-air">—</strong>
+            </div>
+          </div>
+
+          <div class="mini-kpi-card">
+            <div class="mini-kpi-icon">🚓</div>
+            <div>
+              <span class="mini-kpi-label">Délinquance</span>
+              <strong id="mini-delinquance">—</strong>
+            </div>
+          </div>
+
+          <div class="mini-kpi-card">
+            <div class="mini-kpi-icon">🏷️</div>
+            <div>
+              <span class="mini-kpi-label">Typologie</span>
+              <strong id="mini-typo-summary">T1–T4+</strong>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- ANCIEN BLOC CONSERVÉ POUR COMPATIBILITÉ JS -->
+        <div class="kpi-card hidden-compat">
+          <span class="kpi-label">Indicateurs territoriaux</span>
+
+          <div id="kpi-log">
+            <div class="kpi-row">🏘️ <span class="kpi-label">Programmes sociaux</span><span>—</span></div>
+            <div class="kpi-row">👥 <span class="kpi-label">Densité</span><span>—</span></div>
+            <div class="kpi-row">🚓 <span class="kpi-label">Délinquance</span><span>—</span></div>
+            <div class="kpi-row">🌳 <span class="kpi-label">Espaces verts</span><span>—</span></div>
+            <div class="kpi-row">🌫️ <span class="kpi-label">NO2</span><span>—</span></div>
+          </div>
+        </div>
+
+        <!-- TYPOLOGIE -->
+        <div class="kpi-card">
+          <span class="kpi-label">🏷️ Typologie des logements</span>
+          <div id="kpi-typo">—</div>
+        </div>
+
+        <!-- INSIGHTS -->
+        <div class="insights-card">
+          <div class="insights-title">✨ Analyse automatique</div>
+
+          <div id="insight-text">
+            Sélectionne un arrondissement pour générer une lecture claire des indicateurs.
+          </div>
+        </div>
+
+        <div class="ranking-card">
+  <div class="ranking-title">🏆 Classement Paris</div>
+
+  <div id="ranking-content">
+    Chargement du classement...
+  </div>
+</div>
+
+        <!-- ÉVOLUTION -->
+        <div class="kpi-card chart-card">
+          <div class="chart-header">
+            <span class="kpi-label">📈 Évolution prix/m²</span>
+            <span class="chart-pill">2020 → 2024</span>
+          </div>
+
+          <canvas id="chart-evolution" height="130"></canvas>
+        </div>
+
+        <!-- PIPELINE -->
+        <div class="pipeline-card">
+          <div class="pipeline-title">Architecture data</div>
+
+          <div class="pipeline-flow">
+            <span>Bronze</span>
+            <b>→</b>
+            <span>Silver</span>
+            <b>→</b>
+            <span>Gold</span>
+            <b>→</b>
+            <span>FastAPI</span>
+            <b>→</b>
+            <span>Dashboard</span>
+          </div>
+        </div>
+
       </div>
 
       <!-- MODE COMPARAISON -->
       <div id="panel-compare" style="display:none">
-        <div class="compare-title">Comparer deux arrondissements</div>
+
+        <div class="section-heading">
+          <span>⚖️ Mode comparaison</span>
+          <strong>Comparer deux arrondissements</strong>
+        </div>
+
         <div class="control-block">
           <label class="control-label">Arrondissement A</label>
           <select id="arr-compare-1" class="select-input"></select>
         </div>
+
         <div class="control-block">
           <label class="control-label">Arrondissement B</label>
           <select id="arr-compare-2" class="select-input"></select>
         </div>
+
         <div class="control-block">
           <label class="control-label">Année</label>
           <select id="year-compare" class="select-input"></select>
         </div>
-        <button class="btn-primary" onclick="runComparison()">⚖️ Comparer</button>
+
+        <button class="btn-primary" onclick="runComparison()">
+          ⚖️ Lancer la comparaison
+        </button>
+
         <div id="compare-result"></div>
+
       </div>
 
       <!-- MODE TIMELINE -->
       <div id="panel-timeline" style="display:none">
-        <div class="compare-title">Timeline animée</div>
+
+        <div class="section-heading">
+          <span>▶ Timeline animée</span>
+          <strong>Rejouer l’évolution historique</strong>
+        </div>
+
         <div class="control-block">
           <label class="control-label">Arrondissement</label>
           <select id="arr-timeline" class="select-input"></select>
         </div>
+
         <div class="timeline-controls">
-          <button class="btn-primary" id="btn-play" onclick="playTimeline()">▶ Play</button>
-          <button class="btn-secondary" onclick="stopTimeline()">⏹ Stop</button>
+          <button class="btn-primary" id="btn-play" onclick="playTimeline()">
+            ▶ Play
+          </button>
+
+          <button class="btn-secondary" onclick="stopTimeline()">
+            ⏹ Stop
+          </button>
         </div>
-        <div class="kpi-card" style="margin-top:12px">
-          <span class="kpi-label">Année en cours</span>
-          <div id="timeline-year" class="kpi-value">—</div>
-          <div id="timeline-prix" class="kpi-sub">Prix : —</div>
+
+        <div class="kpi-main-card">
+          <div>
+            <span class="kpi-eyebrow">Année en cours</span>
+            <div id="timeline-year" class="kpi-value">—</div>
+            <div id="timeline-prix" class="kpi-sub">Prix : —</div>
+          </div>
+
+          <div class="kpi-badge">
+            ANIMÉ
+          </div>
         </div>
-        <div class="kpi-card" style="margin-top:8px">
+
+        <div class="kpi-card chart-card">
           <span class="kpi-label">Évolution complète</span>
-          <canvas id="chart-timeline" height="140"></canvas>
+          <canvas id="chart-timeline" height="150"></canvas>
         </div>
+
       </div>
 
     </section>
