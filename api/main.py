@@ -9,7 +9,6 @@ from typing import Optional
 
 app = FastAPI(title="Urban Data Explorer API", version="1.0.0")
 
-# ─── Quotas API — C2.1 ─────────────────────────────────────────────────────
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
@@ -29,16 +28,40 @@ SILVER = DATA / "Silver"
 
 API_KEY = "urban-data-explorer-2024"
 
+# --- Cache memoire C2.4 ---------------------------------------------------
+# Tous les fichiers Gold sont charges une seule fois au demarrage de l'API,
+# au lieu d'etre relus depuis le disque a chaque requete. On privilegie le
+# format Parquet (colonnaire, plus compact) quand il existe, sinon CSV.
+_cache: dict = {}
+
+
+@app.on_event("startup")
+def preload_gold_data():
+    for csv_path in GOLD.glob("*.csv"):
+        parquet_path = csv_path.with_suffix(".parquet")
+        if parquet_path.exists():
+            df = pd.read_parquet(parquet_path)
+            source = "parquet"
+        else:
+            df = pd.read_csv(csv_path)
+            source = "csv"
+        df = df.astype(object).where(pd.notnull(df), None)
+        _cache[csv_path.name] = df
+        print(f"Precharge: {csv_path.name} ({len(df)} lignes, source={source})")
+    print(f"{len(_cache)} fichiers Gold precharges en memoire au demarrage (C2.4)")
+
 
 def load_gold(name: str):
-    df = pd.read_csv(GOLD / name)
-    df = df.astype(object).where(pd.notnull(df), None)
-    return df
+    if name not in _cache:
+        df = pd.read_csv(GOLD / name)
+        df = df.astype(object).where(pd.notnull(df), None)
+        _cache[name] = df
+    return _cache[name].copy()
 
 
 def check_api_key(x_api_key: str = Header(None)):
     if x_api_key != API_KEY:
-        raise HTTPException(status_code=403, detail="Clé API invalide. Fournir le header X-API-Key.")
+        raise HTTPException(status_code=403, detail="Cle API invalide. Fournir le header X-API-Key.")
     return x_api_key
 
 
@@ -49,10 +72,9 @@ def home(request: Request):
         "status": "ok",
         "message": "API Urban Data Explorer fonctionne !",
         "version": "1.0.0",
-        "quota": "30 requêtes/minute par IP sur les endpoints de données, 10/minute sur /admin",
         "endpoints": ["/prix_m2", "/logements_sociaux", "/delinquance", "/densite",
                       "/espaces_verts", "/qualite_air", "/typologie", "/arrondissements",
-                      "/timeline", "/comparaison", "/admin/status"]
+                      "/timeline", "/comparaison", "/admin/status", "/admin/cache"]
     }
 
 
@@ -62,11 +84,23 @@ def admin_status(request: Request, x_api_key: str = Header(None)):
     check_api_key(x_api_key)
     return {
         "status": "ok",
-        "message": "Accès admin autorisé",
-        "tables": 7,
+        "message": "Acces admin autorise",
+        "tables": len(_cache),
         "sources": ["DVF data.gouv", "OpenData Paris", "INSEE", "SSMSI", "Airparif"],
         "arrondissements": 20,
         "annees": "2020-2024"
+    }
+
+
+@app.get("/admin/cache")
+@limiter.limit("10/minute")
+def cache_status(request: Request, x_api_key: str = Header(None)):
+    """Preuve du prechargement memoire (C2.4)."""
+    check_api_key(x_api_key)
+    return {
+        "fichiers_en_cache": list(_cache.keys()),
+        "nb_fichiers": len(_cache),
+        "lignes_par_fichier": {k: len(v) for k, v in _cache.items()}
     }
 
 
