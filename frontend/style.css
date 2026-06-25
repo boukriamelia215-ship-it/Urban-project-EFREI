@@ -696,3 +696,29 @@ button:focus-visible, select:focus-visible { outline: 2px solid var(--indigo); o
   flex-shrink:0;
   box-shadow:0 10px 22px rgba(91,79,232,.25);
 }
+.main-insight-card{
+  margin-top:14px;
+  background:linear-gradient(135deg, rgba(255,186,73,.12), rgba(124,92,255,.12));
+  border:1px solid rgba(255,186,73,.22);
+  border-radius:16px;
+  padding:16px;
+}
+
+.main-insight-title{
+  color:#ffba49;
+  font-weight:800;
+  margin-bottom:12px;
+  text-transform:uppercase;
+  letter-spacing:1px;
+  font-size:12px;
+}
+
+#main-insight-content{
+  color:white;
+  font-size:13px;
+  line-height:1.6;
+}
+
+#main-insight-content strong{
+  color:#4ade80;
+}

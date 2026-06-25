@@ -393,6 +393,37 @@ function updateChart() {
       }
     }
   });
+  const mainInsight = document.getElementById("main-insight-content");
+
+if (mainInsight) {
+
+  let insight = "";
+
+  if (prix?.prix_m2_median > 15000) {
+    insight =
+      `🔥 Cet arrondissement appartient au segment <strong>premium</strong> du marché parisien.`;
+  }
+
+  else if (prix?.prix_m2_median > 12000) {
+    insight =
+      `📈 Cet arrondissement présente une <strong>forte valorisation immobilière</strong>.`;
+  }
+
+  else {
+    insight =
+      `🏠 Cet arrondissement reste relativement <strong>accessible</strong> comparé aux secteurs les plus chers de Paris.`;
+  }
+
+  if (variation != null && variation > 5) {
+    insight += `<br><br>🚀 Les prix progressent rapidement avec une hausse de <strong>+${variation.toFixed(1)}%</strong>.`;
+  }
+
+  if (ev?.m2_par_habitant > 10) {
+    insight += `<br><br>🌳 Il bénéficie également d'un excellent accès aux espaces verts.`;
+  }
+
+  mainInsight.innerHTML = insight;
+}
 }
 
 // ── Mode Comparaison ──────────────────────────────────────────────────────────
