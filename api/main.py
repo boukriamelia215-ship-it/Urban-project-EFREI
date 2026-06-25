@@ -1,8 +1,12 @@
-﻿from fastapi import FastAPI, Query, Header, HTTPException, Request
+﻿from fastapi import FastAPI, Query, Header, HTTPException, Request, Depends
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from jose import JWTError, jwt
+import bcrypt
+from datetime import datetime, timedelta
 import pandas as pd
 from pathlib import Path
 from typing import Optional
@@ -26,12 +30,75 @@ DATA = ROOT / "data"
 GOLD = DATA / "Gold"
 SILVER = DATA / "Silver"
 
-API_KEY = "urban-data-explorer-2024"
+# ---------------------------------------------------------------------------
+# AUTHENTIFICATION JWT -- C2.1
+# ---------------------------------------------------------------------------
+SECRET_KEY = "urban-data-explorer-secret-key-2024"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
-# --- Cache memoire C2.4 ---------------------------------------------------
-# Tous les fichiers Gold sont charges une seule fois au demarrage de l'API,
-# au lieu d'etre relus depuis le disque a chaque requete. On privilegie le
-# format Parquet (colonnaire, plus compact) quand il existe, sinon CSV.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
+
+
+# Base utilisateurs (demo pedagogique -- en prod : table dans PostgreSQL)
+FAKE_USERS_DB = {
+    "admin": {
+        "username": "admin",
+        "hashed_password": hash_password("urbanadmin2024"),
+        "role": "admin",
+    },
+    "client": {
+        "username": "client",
+        "hashed_password": hash_password("urbanclient2024"),
+        "role": "lecture",
+    },
+}
+
+
+def authenticate_user(username: str, password: str):
+    user = FAKE_USERS_DB.get(username)
+    if not user or not verify_password(password, user["hashed_password"]):
+        return None
+    return user
+
+
+def create_access_token(data: dict):
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Token invalide ou expire",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    user = FAKE_USERS_DB.get(username)
+    if user is None:
+        raise credentials_exception
+    return user
+
+
+# ---------------------------------------------------------------------------
+# Cache memoire -- C2.4
+# ---------------------------------------------------------------------------
 _cache: dict = {}
 
 
@@ -41,13 +108,10 @@ def preload_gold_data():
         parquet_path = csv_path.with_suffix(".parquet")
         if parquet_path.exists():
             df = pd.read_parquet(parquet_path)
-            source = "parquet"
         else:
             df = pd.read_csv(csv_path)
-            source = "csv"
         df = df.astype(object).where(pd.notnull(df), None)
         _cache[csv_path.name] = df
-        print(f"Precharge: {csv_path.name} ({len(df)} lignes, source={source})")
     print(f"{len(_cache)} fichiers Gold precharges en memoire au demarrage (C2.4)")
 
 
@@ -59,10 +123,17 @@ def load_gold(name: str):
     return _cache[name].copy()
 
 
-def check_api_key(x_api_key: str = Header(None)):
-    if x_api_key != API_KEY:
-        raise HTTPException(status_code=403, detail="Cle API invalide. Fournir le header X-API-Key.")
-    return x_api_key
+# ---------------------------------------------------------------------------
+# ROUTE DE LOGIN -- C2.1
+# ---------------------------------------------------------------------------
+@app.post("/login")
+@limiter.limit("6/minute")
+def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends()):
+    user = authenticate_user(form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Nom d'utilisateur ou mot de passe incorrect")
+    access_token = create_access_token(data={"sub": user["username"], "role": user["role"]})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 @app.get("/")
@@ -72,19 +143,20 @@ def home(request: Request):
         "status": "ok",
         "message": "API Urban Data Explorer fonctionne !",
         "version": "1.0.0",
-        "endpoints": ["/prix_m2", "/logements_sociaux", "/delinquance", "/densite",
+        "auth": "POST /login avec username/password pour obtenir un token JWT",
+        "endpoints": ["/login", "/prix_m2", "/logements_sociaux", "/delinquance", "/densite",
                       "/espaces_verts", "/qualite_air", "/typologie", "/arrondissements",
                       "/timeline", "/comparaison", "/admin/status", "/admin/cache"]
     }
 
 
 @app.get("/admin/status")
-@limiter.limit("10/minute")
-def admin_status(request: Request, x_api_key: str = Header(None)):
-    check_api_key(x_api_key)
+@limiter.limit("6/minute")
+def admin_status(request: Request, current_user: dict = Depends(get_current_user)):
     return {
         "status": "ok",
-        "message": "Acces admin autorise",
+        "utilisateur": current_user["username"],
+        "role": current_user["role"],
         "tables": len(_cache),
         "sources": ["DVF data.gouv", "OpenData Paris", "INSEE", "SSMSI", "Airparif"],
         "arrondissements": 20,
@@ -93,11 +165,10 @@ def admin_status(request: Request, x_api_key: str = Header(None)):
 
 
 @app.get("/admin/cache")
-@limiter.limit("10/minute")
-def cache_status(request: Request, x_api_key: str = Header(None)):
-    """Preuve du prechargement memoire (C2.4)."""
-    check_api_key(x_api_key)
+@limiter.limit("6/minute")
+def cache_status(request: Request, current_user: dict = Depends(get_current_user)):
     return {
+        "utilisateur": current_user["username"],
         "fichiers_en_cache": list(_cache.keys()),
         "nb_fichiers": len(_cache),
         "lignes_par_fichier": {k: len(v) for k, v in _cache.items()}
