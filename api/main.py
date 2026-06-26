@@ -14,6 +14,8 @@ import pandas as pd
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
+from sqlalchemy import create_engine
+from pymongo import MongoClient
 
 load_dotenv()
 
@@ -31,10 +33,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "data"
-GOLD = DATA / "Gold"
-SILVER = DATA / "Silver"
+# ---------------------------------------------------------------------------
+# CONNEXIONS AUX BASES -- C1.1 (PostgreSQL) + C1.2 (MongoDB NoSQL)
+# Aucun fichier CSV/JSON local n'est lu pour servir les endpoints de donnees.
+# SUPABASE_DB_URL et MONGODB_URL doivent etre definis dans .env (local) ET
+# dans les variables d'environnement de Render (production).
+# ---------------------------------------------------------------------------
+SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
+engine = create_engine(SUPABASE_DB_URL) if SUPABASE_DB_URL else None
+
+MONGODB_URL = os.getenv("MONGODB_URL")
+mongo_client = MongoClient(MONGODB_URL) if MONGODB_URL else None
+mongo_db = mongo_client["urban_data_explorer"] if mongo_client else None
+
+# Tables relationnelles servies depuis PostgreSQL (espaces_verts est a part, voir MongoDB)
+TABLES = [
+    "prix_m2_par_arrondissement",
+    "logements_sociaux",
+    "delinquance",
+    "densite",
+    "typologie_logements",
+    "qualite_air",
+]
 
 # ---------------------------------------------------------------------------
 # AUTHENTIFICATION JWT -- C2.1
@@ -54,7 +74,6 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode("utf-8"), hashed_password.encode("utf-8"))
 
 
-# Base utilisateurs (demo pedagogique -- en prod : table dans PostgreSQL)
 FAKE_USERS_DB = {
     "admin": {
         "username": "admin",
@@ -103,30 +122,61 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
 
 # ---------------------------------------------------------------------------
-# Cache memoire -- C2.4
+# Cache memoire -- rempli depuis PostgreSQL au demarrage (C1.1 + C2.4)
 # ---------------------------------------------------------------------------
 _cache: dict = {}
 
 
 @app.on_event("startup")
-def preload_gold_data():
-    for csv_path in GOLD.glob("*.csv"):
-        parquet_path = csv_path.with_suffix(".parquet")
-        if parquet_path.exists():
-            df = pd.read_parquet(parquet_path)
-        else:
-            df = pd.read_csv(csv_path)
-        df = df.astype(object).where(pd.notnull(df), None)
-        _cache[csv_path.name] = df
-    print(f"{len(_cache)} fichiers Gold precharges en memoire au demarrage (C2.4)")
+def preload_from_postgres():
+    if engine is None:
+        print("ATTENTION: SUPABASE_DB_URL manquant -- aucune donnee relationnelle chargee")
+    else:
+        for table_name in TABLES:
+            try:
+                df = pd.read_sql(f"SELECT * FROM {table_name}", engine)
+                df = df.astype(object).where(pd.notnull(df), None)
+                _cache[table_name] = df
+                print(f"Precharge depuis PostgreSQL: {table_name} ({len(df)} lignes)")
+            except Exception as e:
+                print(f"Erreur chargement table '{table_name}': {e}")
+        try:
+            df_arr = pd.read_sql("SELECT * FROM arrondissement", engine)
+            _cache["arrondissement"] = df_arr.astype(object).where(pd.notnull(df_arr), None)
+            print(f"Precharge depuis PostgreSQL: arrondissement ({len(df_arr)} lignes)")
+        except Exception as e:
+            print(f"Erreur chargement table 'arrondissement': {e}")
+
+    if mongo_db is None:
+        print("ATTENTION: MONGODB_URL manquant -- espaces_verts indisponible")
+    else:
+        try:
+            mongo_client.admin.command("ping")
+            print("Connexion MongoDB confirmee (collection espaces_verts)")
+        except Exception as e:
+            print(f"Erreur connexion MongoDB: {e}")
+
+    print(f"{len(_cache)} tables PostgreSQL precargees au demarrage")
 
 
-def load_gold(name: str):
-    if name not in _cache:
-        df = pd.read_csv(GOLD / name)
+def load_table(table_name: str):
+    if table_name not in _cache:
+        if engine is None:
+            raise HTTPException(status_code=503, detail="Base de donnees indisponible")
+        df = pd.read_sql(f"SELECT * FROM {table_name}", engine)
         df = df.astype(object).where(pd.notnull(df), None)
-        _cache[name] = df
-    return _cache[name].copy()
+        _cache[table_name] = df
+    return _cache[table_name].copy()
+
+
+def load_espaces_verts_mongo(arrondissement: Optional[int] = None):
+    """Lit l'indicateur espaces_verts directement depuis MongoDB -- C1.2 (NoSQL)."""
+    if mongo_db is None:
+        raise HTTPException(status_code=503, detail="MongoDB indisponible")
+    collection = mongo_db["espaces_verts"]
+    query = {"arrondissement": arrondissement} if arrondissement else {}
+    docs = list(collection.find(query, {"_id": 0}))
+    return docs
 
 
 # ---------------------------------------------------------------------------
@@ -149,6 +199,7 @@ def home(request: Request):
         "status": "ok",
         "message": "API Urban Data Explorer fonctionne !",
         "version": "1.0.0",
+        "sources": "PostgreSQL (Supabase) + MongoDB (NoSQL) + Redis (streaming temps reel)",
         "auth": "POST /login avec username/password pour obtenir un token JWT",
         "endpoints": ["/login", "/prix_m2", "/logements_sociaux", "/delinquance", "/densite",
                       "/espaces_verts", "/qualite_air", "/qualite_air/live", "/typologie",
@@ -163,8 +214,9 @@ def admin_status(request: Request, current_user: dict = Depends(get_current_user
         "status": "ok",
         "utilisateur": current_user["username"],
         "role": current_user["role"],
-        "tables": len(_cache),
-        "sources": ["DVF data.gouv", "OpenData Paris", "INSEE", "SSMSI", "Airparif"],
+        "tables_postgres_en_cache": len(_cache),
+        "mongodb_connecte": mongo_db is not None,
+        "sources_originelles": ["DVF data.gouv", "OpenData Paris", "INSEE", "SSMSI", "Airparif"],
         "arrondissements": 20,
         "annees": "2020-2024"
     }
@@ -175,16 +227,16 @@ def admin_status(request: Request, current_user: dict = Depends(get_current_user
 def cache_status(request: Request, current_user: dict = Depends(get_current_user)):
     return {
         "utilisateur": current_user["username"],
-        "fichiers_en_cache": list(_cache.keys()),
-        "nb_fichiers": len(_cache),
-        "lignes_par_fichier": {k: len(v) for k, v in _cache.items()}
+        "tables_en_cache": list(_cache.keys()),
+        "nb_tables": len(_cache),
+        "lignes_par_table": {k: len(v) for k, v in _cache.items()}
     }
 
 
 @app.get("/prix_m2")
 @limiter.limit("30/minute")
 def prix_m2(request: Request, annee: Optional[int] = None, arrondissement: Optional[int] = None):
-    df = load_gold("prix_m2_par_arrondissement.csv")
+    df = load_table("prix_m2_par_arrondissement")
     if annee:
         df = df[df["annee"] == annee]
     if arrondissement:
@@ -195,7 +247,7 @@ def prix_m2(request: Request, annee: Optional[int] = None, arrondissement: Optio
 @app.get("/typologie")
 @limiter.limit("30/minute")
 def typologie(request: Request, annee: Optional[int] = None):
-    df = load_gold("typologie_logements.csv")
+    df = load_table("typologie_logements")
     if annee:
         df = df[df["annee"] == annee]
     return df.to_dict(orient="records")
@@ -204,7 +256,7 @@ def typologie(request: Request, annee: Optional[int] = None):
 @app.get("/logements_sociaux")
 @limiter.limit("30/minute")
 def logements_sociaux(request: Request, annee: Optional[int] = None):
-    df = load_gold("logements_sociaux.csv")
+    df = load_table("logements_sociaux")
     if annee:
         df = df[df["annee"] == annee]
     return df.to_dict(orient="records")
@@ -213,7 +265,7 @@ def logements_sociaux(request: Request, annee: Optional[int] = None):
 @app.get("/delinquance")
 @limiter.limit("30/minute")
 def delinquance(request: Request, annee: Optional[int] = None):
-    df = load_gold("delinquance.csv")
+    df = load_table("delinquance")
     if annee:
         df = df[df["annee"] == annee]
     return df.to_dict(orient="records")
@@ -222,7 +274,7 @@ def delinquance(request: Request, annee: Optional[int] = None):
 @app.get("/densite")
 @limiter.limit("30/minute")
 def densite(request: Request, annee: Optional[int] = None):
-    df = load_gold("densite.csv")
+    df = load_table("densite")
     if annee:
         df = df[df["annee"] == annee]
     return df.to_dict(orient="records")
@@ -231,16 +283,14 @@ def densite(request: Request, annee: Optional[int] = None):
 @app.get("/espaces_verts")
 @limiter.limit("30/minute")
 def espaces_verts(request: Request, arrondissement: Optional[int] = None):
-    df = load_gold("espaces_verts.csv")
-    if arrondissement:
-        df = df[df["arrondissement"] == arrondissement]
-    return df.to_dict(orient="records")
+    """Lit MongoDB directement -- C1.2 (NoSQL)."""
+    return load_espaces_verts_mongo(arrondissement)
 
 
 @app.get("/qualite_air")
 @limiter.limit("30/minute")
 def qualite_air(request: Request, arrondissement: Optional[int] = None):
-    df = load_gold("qualite_air.csv")
+    df = load_table("qualite_air")
     if arrondissement:
         df = df[df["arrondissement"] == arrondissement]
     return df.to_dict(orient="records")
@@ -267,14 +317,17 @@ def qualite_air_live(request: Request):
 @app.get("/arrondissements")
 @limiter.limit("30/minute")
 def arrondissements(request: Request):
-    df = pd.read_csv(SILVER / "arrondissements_clean.csv")
+    df = _cache.get("arrondissement")
+    if df is None:
+        raise HTTPException(status_code=503, detail="Donnees arrondissements indisponibles")
+    df = df.rename(columns={"arrondissement": "code_arrondissement", "nom": "nom_officiel"})
     return df.to_dict(orient="records")
 
 
 @app.get("/timeline")
 @limiter.limit("30/minute")
 def timeline(request: Request, arr: int = Query(..., description="Code arrondissement (1-20)")):
-    df = load_gold("prix_m2_par_arrondissement.csv")
+    df = load_table("prix_m2_par_arrondissement")
     df_arr = df[df["arrondissement"] == arr].sort_values("annee")
     if df_arr.empty:
         return {"arrondissement": arr, "data": []}
@@ -295,9 +348,9 @@ def comparaison(
     arr2: int = Query(...),
     annee: Optional[int] = None
 ):
-    def get_indicator(csv_name: str, arr_code: int, year: Optional[int]):
+    def get_indicator(table_name: str, arr_code: int, year: Optional[int]):
         try:
-            df = load_gold(csv_name)
+            df = load_table(table_name)
             df_f = df[df["arrondissement"] == arr_code]
             if year:
                 df_f = df_f[df_f["annee"] == year]
@@ -306,16 +359,16 @@ def comparaison(
             return []
 
     def build_arr_data(arr_code: int):
-        prix = get_indicator("prix_m2_par_arrondissement.csv", arr_code, annee)
-        social = get_indicator("logements_sociaux.csv", arr_code, annee)
-        delin = get_indicator("delinquance.csv", arr_code, annee)
-        dens = get_indicator("densite.csv", arr_code, annee)
-        ev = get_indicator("espaces_verts.csv", arr_code, None)
-        typo = get_indicator("typologie_logements.csv", arr_code, annee)
-        air = get_indicator("qualite_air.csv", arr_code, None)
+        prix = get_indicator("prix_m2_par_arrondissement", arr_code, annee)
+        social = get_indicator("logements_sociaux", arr_code, annee)
+        delin = get_indicator("delinquance", arr_code, annee)
+        dens = get_indicator("densite", arr_code, annee)
+        ev = load_espaces_verts_mongo(arr_code)
+        typo = get_indicator("typologie_logements", arr_code, annee)
+        air = get_indicator("qualite_air", arr_code, None)
 
         try:
-            df_all = load_gold("prix_m2_par_arrondissement.csv")
+            df_all = load_table("prix_m2_par_arrondissement")
             timeline_data = df_all[df_all["arrondissement"] == arr_code].sort_values("annee")[["annee", "prix_m2_median"]].to_dict(orient="records")
         except Exception:
             timeline_data = []

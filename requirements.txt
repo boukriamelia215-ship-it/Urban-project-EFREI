@@ -13,3 +13,5 @@ pyarrow
 python-jose[cryptography]
 python-multipart
 passlib[bcrypt]
+
+pymongo
