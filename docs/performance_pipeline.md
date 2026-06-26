@@ -42,3 +42,22 @@ pertinente a cette echelle, pas le changement de format de stockage.
   non agregees, historique long)
 - Index PostgreSQL sur (arrondissement, annee) pour les requetes SQL
   analytiques (tests de charge deja realises, voir postgres_load_test.md)
+## 5. Test de charge MongoDB (C1.2 - performance NoSQL)
+
+Script `scripts/test_load_mongodb.py` -- 10 threads x 20 requetes simultanees
+sur la collection `espaces_verts` :
+
+| Metrique | Valeur |
+|---|---|
+| Requetes reussies | 200/200 |
+| Erreurs | 0 |
+| Temps total | 3.607 s |
+| Debit | 55.5 req/s |
+
+## 6. Temps de reponse par source de donnees (mesure manuelle)
+
+| Endpoint | Source | Latence typique |
+|---|---|---|
+| /prix_m2 | PostgreSQL (cache demarrage) | <5 ms |
+| /espaces_verts | MongoDB (requete directe) | ~20-50 ms |
+| /qualite_air/live | Redis (requete directe) | ~30-60 ms |
