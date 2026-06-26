@@ -1,0 +1,17 @@
+﻿version: "3.9"
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: urban-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  urban-api:
+    build: .
+    container_name: urban-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    restart: unless-stopped
