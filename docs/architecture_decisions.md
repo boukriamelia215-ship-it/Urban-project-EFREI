@@ -33,3 +33,19 @@ semi-structurées, schema-on-read).
   répondre).
 - **Limite assumée** : pas de cluster multi-nœuds (hors budget étudiant) ;
   documenté ici comme axe d'amélioration plutôt que dissimulé.
+## Conformité RGPD et protection des données
+
+Toutes les données utilisées dans ce projet sont des **données ouvertes
+publiques** (open data) : data.gouv.fr (DVF), OpenData Paris, INSEE, SSMSI,
+Airparif. Aucune donnée personnelle identifiante n'est collectée ou traitée
+(pas de noms, adresses précises individuelles, ou informations permettant
+d'identifier une personne physique).
+
+Les données les plus granulaires (transactions DVF) sont déjà anonymisées
+à la source par data.gouv.fr avant publication. Notre pipeline travaille
+uniquement sur des agrégats par arrondissement et par année, ce qui exclut
+tout risque de ré-identification.
+
+Base légale : Licence Ouverte / Etalab pour les données françaises, ce qui
+autorise explicitement la réutilisation, y compris à des fins d'analyse
+et de visualisation comme dans ce projet.
