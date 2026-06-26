@@ -6,10 +6,16 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from jose import JWTError, jwt
 import bcrypt
+import os
+import json
+import redis
 from datetime import datetime, timedelta
 import pandas as pd
 from pathlib import Path
 from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI(title="Urban Data Explorer API", version="1.0.0")
 
@@ -145,8 +151,8 @@ def home(request: Request):
         "version": "1.0.0",
         "auth": "POST /login avec username/password pour obtenir un token JWT",
         "endpoints": ["/login", "/prix_m2", "/logements_sociaux", "/delinquance", "/densite",
-                      "/espaces_verts", "/qualite_air", "/typologie", "/arrondissements",
-                      "/timeline", "/comparaison", "/admin/status", "/admin/cache"]
+                      "/espaces_verts", "/qualite_air", "/qualite_air/live", "/typologie",
+                      "/arrondissements", "/timeline", "/comparaison", "/admin/status", "/admin/cache"]
     }
 
 
@@ -238,6 +244,24 @@ def qualite_air(request: Request, arrondissement: Optional[int] = None):
     if arrondissement:
         df = df[df["arrondissement"] == arrondissement]
     return df.to_dict(orient="records")
+
+
+@app.get("/qualite_air/live")
+@limiter.limit("30/minute")
+def qualite_air_live(request: Request):
+    """Derniere valeur recue via le flux Redis (streaming temps reel) -- C2.2"""
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    try:
+        r = redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
+        keys = r.keys("air:latest:*")
+        resultats = []
+        for k in keys:
+            valeur = r.get(k)
+            if valeur:
+                resultats.append(json.loads(valeur))
+        return {"stations": resultats, "nb_stations": len(resultats)}
+    except Exception as e:
+        return {"stations": [], "nb_stations": 0, "erreur": str(e)}
 
 
 @app.get("/arrondissements")

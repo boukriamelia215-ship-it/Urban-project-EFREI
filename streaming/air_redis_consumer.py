@@ -4,6 +4,10 @@ Ce consommateur tourne dans son propre processus, separe du producteur. Il
 s'abonne au canal Redis et recoit les mesures de qualite de l'air publiees par
 air_redis_producer.py via le broker, sur le reseau.
 
+En plus du traitement temps reel + micro-batch, il ecrit la derniere valeur
+recue de chaque station dans Redis (cle air:latest:<station>), pour que l'API
+puisse l'exposer au dashboard -- C2.2 connecte au reste du projet, pas isole.
+
 Lancer (2e terminal, APRES le producteur) : python streaming/air_redis_consumer.py
 Arreter avec Ctrl+C.
 """
@@ -11,8 +15,7 @@ import json
 import os
 import threading
 import time
-from datetime import datetime
-
+from datetime import datetime, timezone
 import redis
 from dotenv import load_dotenv
 
@@ -64,10 +67,24 @@ def main():
             event = json.loads(message["data"])
         except (ValueError, TypeError):
             continue
+
         no2 = event.get("no2")
         no2_txt = f"{no2:>5}" if isinstance(no2, (int, float)) else "  n/a"
         print(f"[TEMPS REEL] {event.get('station',''):<20} "
               f"AQI={str(event.get('aqi')):>3}  NO2={no2_txt} ug/m3")
+
+        station = event.get("station", "inconnue")
+        snapshot = {
+            "station": station,
+            "aqi": event.get("aqi"),
+            "no2": event.get("no2"),
+            "pm10": event.get("pm10"),
+            "pm25": event.get("pm25"),
+            "o3": event.get("o3"),
+            "derniere_maj": datetime.now(timezone.utc).isoformat(),
+        }
+        client.set(f"air:latest:{station}", json.dumps(snapshot))
+
         microbatch_buffer.append(event)
 
 
