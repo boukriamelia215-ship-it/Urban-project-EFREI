@@ -91,3 +91,36 @@ CREATE POLICY "Lecture publique" ON densite FOR SELECT USING (true);
 CREATE POLICY "Lecture publique" ON typologie_logements FOR SELECT USING (true);
 CREATE POLICY "Lecture publique" ON espaces_verts FOR SELECT USING (true);
 CREATE POLICY "Lecture publique" ON qualite_air FOR SELECT USING (true);
+-- Indicateurs creatifs (C2.3) -- meme schema relationnel que les tables d'origine
+
+CREATE TABLE indice_famille (
+    arrondissement INTEGER PRIMARY KEY REFERENCES arrondissement(arrondissement),
+    score_indice_famille NUMERIC,
+    m2_par_habitant NUMERIC,
+    part_t4 NUMERIC,
+    score_delinquance NUMERIC
+);
+
+CREATE TABLE indice_investisseur (
+    arrondissement INTEGER PRIMARY KEY REFERENCES arrondissement(arrondissement),
+    score_indice_investisseur NUMERIC,
+    croissance_pct NUMERIC,
+    densite_hab_km2 NUMERIC,
+    prix_2024 NUMERIC
+);
+
+CREATE TABLE indice_respire (
+    arrondissement INTEGER PRIMARY KEY REFERENCES arrondissement(arrondissement),
+    score_indice_respire NUMERIC,
+    no2_moyen NUMERIC,
+    m2_par_habitant NUMERIC,
+    densite_hab_km2 NUMERIC
+);
+
+ALTER TABLE indice_famille ENABLE ROW LEVEL SECURITY;
+ALTER TABLE indice_investisseur ENABLE ROW LEVEL SECURITY;
+ALTER TABLE indice_respire ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Lecture publique" ON indice_famille FOR SELECT USING (true);
+CREATE POLICY "Lecture publique" ON indice_investisseur FOR SELECT USING (true);
+CREATE POLICY "Lecture publique" ON indice_respire FOR SELECT USING (true);
