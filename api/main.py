@@ -342,6 +342,21 @@ def indice_respire(request: Request, arrondissement: Optional[int] = None,
 
 
 @app.get("/qualite_air/live")
+@limiter.limit("30/minute")
+def qualite_air_live(request: Request, current_user: dict = Depends(get_current_user)):
+    """Derniere valeur recue via le flux Redis (streaming temps reel) -- C2.2"""
+    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+    try:
+        r = redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
+        keys = r.keys("air:latest:*")
+        resultats = []
+        for k in keys:
+            valeur = r.get(k)
+            if valeur:
+                resultats.append(json.loads(valeur))
+        return {"stations": resultats, "nb_stations": len(resultats)}
+    except Exception as e:
+        return {"stations": [], "nb_stations": 0, "erreur": str(e)}
 
 
 @app.get("/arrondissements")
