@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Connexion — Urban Data Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .login-page {
+      height: 100vh; width: 100vw;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg);
+    }
+    .login-card {
+      width: 360px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      box-shadow: var(--shadow-float);
+    }
+    .login-logo {
+      width: 44px; height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--indigo), var(--blue));
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-display); font-weight: 700; font-size: 15px;
+      margin: 0 auto 16px;
+    }
+    .login-title {
+      font-family: var(--font-display); font-weight: 700; font-size: 18px;
+      text-align: center; color: var(--ink); margin-bottom: 4px;
+    }
+    .login-subtitle {
+      text-align: center; font-size: 12.5px; color: var(--muted); margin-bottom: 24px;
+    }
+    .login-field { margin-bottom: 14px; }
+    .login-field label {
+      display: block; font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 1px; color: var(--muted); margin-bottom: 6px;
+    }
+    .login-field input {
+      width: 100%; padding: 10px 12px; border-radius: var(--radius-sm);
+      border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+      font-family: var(--font-body); font-size: 14px; box-sizing: border-box;
+    }
+    .login-field input:focus-visible { outline: 2px solid var(--indigo); }
+    .login-error {
+      color: var(--negative); font-size: 12.5px; text-align: center;
+      margin-bottom: 12px; min-height: 16px;
+    }
+    .login-btn {
+      width: 100%; padding: 11px 0; border: none; border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--indigo), var(--blue)); color: #fff;
+      font-family: var(--font-body); font-weight: 600; font-size: 14px;
+      cursor: pointer;
+    }
+    .login-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .login-hint {
+      margin-top: 18px; font-size: 11px; color: var(--muted); text-align: center; line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card">
+    <div class="login-logo">UD</div>
+    <div class="login-title">Urban Data Explorer</div>
+    <div class="login-subtitle">Connectez-vous pour accéder au dashboard</div>
+
+    <form id="login-form">
+      <div class="login-field">
+        <label for="username">Nom d'utilisateur</label>
+        <input type="text" id="username" autocomplete="username" required />
+      </div>
+      <div class="login-field">
+        <label for="password">Mot de passe</label>
+        <input type="password" id="password" autocomplete="current-password" required />
+      </div>
+      <div class="login-error" id="login-error"></div>
+      <button type="submit" class="login-btn" id="login-btn">Se connecter</button>
+    </form>
+
+    <div class="login-hint">
+      Comptes de démonstration : <strong>admin</strong> / urbanadmin2024<br>
+      ou <strong>client</strong> / urbanclient2024
+    </div>
+  </div>
+</div>
+
+<script>
+  const API_BASE = "https://urban-project-efrei.onrender.com";
+
+  document.getElementById("login-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value;
+    const errorEl = document.getElementById("login-error");
+    const btn = document.getElementById("login-btn");
+
+    errorEl.textContent = "";
+    btn.disabled = true;
+    btn.textContent = "Connexion...";
+
+    try {
+      const body = new URLSearchParams();
+      body.append("username", username);
+      body.append("password", password);
+
+      const res = await fetch(`${API_BASE}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body
+      });
+
+      if (!res.ok) {
+        throw new Error("Nom d'utilisateur ou mot de passe incorrect");
+      }
+
+      const data = await res.json();
+      sessionStorage.setItem("udx_token", data.access_token);
+      window.location.href = "index.html";
+    } catch (err) {
+      errorEl.textContent = err.message;
+      btn.disabled = false;
+      btn.textContent = "Se connecter";
+    }
+  });
+
+  // Si déjà connecté, retour direct au dashboard
+  if (sessionStorage.getItem("udx_token")) {
+    window.location.href = "index.html";
+  }
+</script>
+</body>
+</html>

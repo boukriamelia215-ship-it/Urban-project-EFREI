@@ -35,9 +35,6 @@ app.add_middleware(
 
 # ---------------------------------------------------------------------------
 # CONNEXIONS AUX BASES -- C1.1 (PostgreSQL) + C1.2 (MongoDB NoSQL)
-# Aucun fichier CSV/JSON local n'est lu pour servir les endpoints de donnees.
-# SUPABASE_DB_URL et MONGODB_URL doivent etre definis dans .env (local) ET
-# dans les variables d'environnement de Render (production).
 # ---------------------------------------------------------------------------
 SUPABASE_DB_URL = os.getenv("SUPABASE_DB_URL")
 engine = create_engine(SUPABASE_DB_URL) if SUPABASE_DB_URL else None
@@ -46,7 +43,6 @@ MONGODB_URL = os.getenv("MONGODB_URL")
 mongo_client = MongoClient(MONGODB_URL) if MONGODB_URL else None
 mongo_db = mongo_client["urban_data_explorer"] if mongo_client else None
 
-# Tables relationnelles servies depuis PostgreSQL (espaces_verts est a part, voir MongoDB)
 TABLES = [
     "prix_m2_par_arrondissement",
     "logements_sociaux",
@@ -54,14 +50,18 @@ TABLES = [
     "densite",
     "typologie_logements",
     "qualite_air",
+    "indice_famille",
+    "indice_investisseur",
+    "indice_respire",
 ]
 
 # ---------------------------------------------------------------------------
 # AUTHENTIFICATION JWT -- C2.1
+# Toutes les routes de donnees exigent desormais un token valide.
 # ---------------------------------------------------------------------------
 SECRET_KEY = "urban-data-explorer-secret-key-2024"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -122,7 +122,7 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
 
 
 # ---------------------------------------------------------------------------
-# Cache memoire -- rempli depuis PostgreSQL au demarrage (C1.1 + C2.4)
+# Cache memoire -- rempli depuis PostgreSQL au demarrage
 # ---------------------------------------------------------------------------
 _cache: dict = {}
 
@@ -170,7 +170,6 @@ def load_table(table_name: str):
 
 
 def load_espaces_verts_mongo(arrondissement: Optional[int] = None):
-    """Lit l'indicateur espaces_verts directement depuis MongoDB -- C1.2 (NoSQL)."""
     if mongo_db is None:
         raise HTTPException(status_code=503, detail="MongoDB indisponible")
     collection = mongo_db["espaces_verts"]
@@ -180,7 +179,7 @@ def load_espaces_verts_mongo(arrondissement: Optional[int] = None):
 
 
 # ---------------------------------------------------------------------------
-# ROUTE DE LOGIN -- C2.1
+# ROUTE DE LOGIN -- publique (pour obtenir le token)
 # ---------------------------------------------------------------------------
 @app.post("/login")
 @limiter.limit("6/minute")
@@ -200,10 +199,7 @@ def home(request: Request):
         "message": "API Urban Data Explorer fonctionne !",
         "version": "1.0.0",
         "sources": "PostgreSQL (Supabase) + MongoDB (NoSQL) + Redis (streaming temps reel)",
-        "auth": "POST /login avec username/password pour obtenir un token JWT",
-        "endpoints": ["/login", "/prix_m2", "/logements_sociaux", "/delinquance", "/densite",
-                      "/espaces_verts", "/qualite_air", "/qualite_air/live", "/typologie",
-                      "/arrondissements", "/timeline", "/comparaison", "/admin/status", "/admin/cache"]
+        "auth": "Toutes les routes de donnees necessitent un token JWT (POST /login)",
     }
 
 
@@ -233,9 +229,13 @@ def cache_status(request: Request, current_user: dict = Depends(get_current_user
     }
 
 
+# ---------------------------------------------------------------------------
+# ROUTES DE DONNEES -- toutes protegees par token JWT
+# ---------------------------------------------------------------------------
 @app.get("/prix_m2")
 @limiter.limit("30/minute")
-def prix_m2(request: Request, annee: Optional[int] = None, arrondissement: Optional[int] = None):
+def prix_m2(request: Request, annee: Optional[int] = None, arrondissement: Optional[int] = None,
+            current_user: dict = Depends(get_current_user)):
     df = load_table("prix_m2_par_arrondissement")
     if annee:
         df = df[df["annee"] == annee]
@@ -246,7 +246,8 @@ def prix_m2(request: Request, annee: Optional[int] = None, arrondissement: Optio
 
 @app.get("/typologie")
 @limiter.limit("30/minute")
-def typologie(request: Request, annee: Optional[int] = None):
+def typologie(request: Request, annee: Optional[int] = None,
+              current_user: dict = Depends(get_current_user)):
     df = load_table("typologie_logements")
     if annee:
         df = df[df["annee"] == annee]
@@ -255,7 +256,8 @@ def typologie(request: Request, annee: Optional[int] = None):
 
 @app.get("/logements_sociaux")
 @limiter.limit("30/minute")
-def logements_sociaux(request: Request, annee: Optional[int] = None):
+def logements_sociaux(request: Request, annee: Optional[int] = None,
+                       current_user: dict = Depends(get_current_user)):
     df = load_table("logements_sociaux")
     if annee:
         df = df[df["annee"] == annee]
@@ -264,7 +266,8 @@ def logements_sociaux(request: Request, annee: Optional[int] = None):
 
 @app.get("/delinquance")
 @limiter.limit("30/minute")
-def delinquance(request: Request, annee: Optional[int] = None):
+def delinquance(request: Request, annee: Optional[int] = None,
+                 current_user: dict = Depends(get_current_user)):
     df = load_table("delinquance")
     if annee:
         df = df[df["annee"] == annee]
@@ -273,7 +276,8 @@ def delinquance(request: Request, annee: Optional[int] = None):
 
 @app.get("/densite")
 @limiter.limit("30/minute")
-def densite(request: Request, annee: Optional[int] = None):
+def densite(request: Request, annee: Optional[int] = None,
+            current_user: dict = Depends(get_current_user)):
     df = load_table("densite")
     if annee:
         df = df[df["annee"] == annee]
@@ -282,41 +286,67 @@ def densite(request: Request, annee: Optional[int] = None):
 
 @app.get("/espaces_verts")
 @limiter.limit("30/minute")
-def espaces_verts(request: Request, arrondissement: Optional[int] = None):
-    """Lit MongoDB directement -- C1.2 (NoSQL)."""
+def espaces_verts(request: Request, arrondissement: Optional[int] = None,
+                   current_user: dict = Depends(get_current_user)):
     return load_espaces_verts_mongo(arrondissement)
 
 
 @app.get("/qualite_air")
 @limiter.limit("30/minute")
-def qualite_air(request: Request, arrondissement: Optional[int] = None):
+def qualite_air(request: Request, arrondissement: Optional[int] = None,
+                 current_user: dict = Depends(get_current_user)):
     df = load_table("qualite_air")
     if arrondissement:
         df = df[df["arrondissement"] == arrondissement]
     return df.to_dict(orient="records")
 
 
-@app.get("/qualite_air/live")
+@app.get("/indice_pulse")
 @limiter.limit("30/minute")
-def qualite_air_live(request: Request):
-    """Derniere valeur recue via le flux Redis (streaming temps reel) -- C2.2"""
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
-    try:
-        r = redis.from_url(redis_url, decode_responses=True, socket_timeout=5)
-        keys = r.keys("air:latest:*")
-        resultats = []
-        for k in keys:
-            valeur = r.get(k)
-            if valeur:
-                resultats.append(json.loads(valeur))
-        return {"stations": resultats, "nb_stations": len(resultats)}
-    except Exception as e:
-        return {"stations": [], "nb_stations": 0, "erreur": str(e)}
+def indice_pulse(request: Request, arrondissement: Optional[int] = None,
+                  current_user: dict = Depends(get_current_user)):
+    df = load_table("indice_pulse")
+    if arrondissement:
+        df = df[df["arrondissement"] == arrondissement]
+    return df.to_dict(orient="records")
+
+
+@app.get("/indice_famille")
+@limiter.limit("30/minute")
+def indice_famille(request: Request, arrondissement: Optional[int] = None,
+                    current_user: dict = Depends(get_current_user)):
+    df = load_table("indice_famille")
+    if arrondissement:
+        df = df[df["arrondissement"] == arrondissement]
+    return df.sort_values("score_indice_famille", ascending=False).to_dict(orient="records")
+
+
+@app.get("/indice_investisseur")
+@limiter.limit("30/minute")
+def indice_investisseur(request: Request, arrondissement: Optional[int] = None,
+                         current_user: dict = Depends(get_current_user)):
+    df = load_table("indice_investisseur")
+    if arrondissement:
+        df = df[df["arrondissement"] == arrondissement]
+    return df.sort_values("score_indice_investisseur", ascending=False).to_dict(orient="records")
+
+
+@app.get("/indice_respire")
+@limiter.limit("30/minute")
+def indice_respire(request: Request, arrondissement: Optional[int] = None,
+                    current_user: dict = Depends(get_current_user)):
+    df = load_table("indice_respire")
+    if arrondissement:
+        df = df[df["arrondissement"] == arrondissement]
+    return df.sort_values("score_indice_respire", ascending=False).to_dict(orient="records")
+
+
+@app.get("/qualite_air/live")
 
 
 @app.get("/arrondissements")
 @limiter.limit("30/minute")
-def arrondissements(request: Request):
+def arrondissements(request: Request, current_user: dict = Depends(get_current_user)):
     df = _cache.get("arrondissement")
     if df is None:
         raise HTTPException(status_code=503, detail="Donnees arrondissements indisponibles")
@@ -326,7 +356,8 @@ def arrondissements(request: Request):
 
 @app.get("/timeline")
 @limiter.limit("30/minute")
-def timeline(request: Request, arr: int = Query(..., description="Code arrondissement (1-20)")):
+def timeline(request: Request, arr: int = Query(..., description="Code arrondissement (1-20)"),
+             current_user: dict = Depends(get_current_user)):
     df = load_table("prix_m2_par_arrondissement")
     df_arr = df[df["arrondissement"] == arr].sort_values("annee")
     if df_arr.empty:
@@ -346,7 +377,8 @@ def comparaison(
     request: Request,
     arr1: int = Query(...),
     arr2: int = Query(...),
-    annee: Optional[int] = None
+    annee: Optional[int] = None,
+    current_user: dict = Depends(get_current_user)
 ):
     def get_indicator(table_name: str, arr_code: int, year: Optional[int]):
         try:

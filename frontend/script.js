@@ -1,4 +1,15 @@
-﻿const API_BASE = "https://urban-project-efrei.onrender.com";
+﻿// ── Garde d'authentification — redirige vers login.html si pas de token ─────
+const AUTH_TOKEN = sessionStorage.getItem("udx_token");
+if (!AUTH_TOKEN) {
+  window.location.href = "login.html";
+}
+
+function logout() {
+  sessionStorage.removeItem("udx_token");
+  window.location.href = "login.html";
+}
+
+const API_BASE = "https://urban-project-efrei.onrender.com";
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 const arrSelect   = document.getElementById("arr-select");
@@ -50,7 +61,14 @@ function getPriceColor(price) {
 
 // ── Utils ─────────────────────────────────────────────────────────────────────
 async function fetchJSON(url) {
-  const res = await fetch(url);
+  const res = await fetch(url, {
+    headers: { "Authorization": `Bearer ${AUTH_TOKEN}` }
+  });
+  if (res.status === 401) {
+    sessionStorage.removeItem("udx_token");
+    window.location.href = "login.html";
+    throw new Error("Session expiree, reconnexion necessaire");
+  }
   if (!res.ok) throw new Error(`Erreur ${res.status} sur ${url}`);
   return res.json();
 }
@@ -63,6 +81,28 @@ function getArrLabel(code) {
 function fmt(n, suffix = "") {
   if (n == null || isNaN(n)) return "—";
   return Number(n).toLocaleString("fr-FR") + suffix;
+}
+
+// ── Streaming temps réel — qualité de l'air (C2.2) ────────────────────────────
+function startLiveAirQuality() {
+  const refresh = async () => {
+    try {
+      const data = await fetchJSON(`${API_BASE}/qualite_air/live`);
+      const el = document.getElementById("live-air-status");
+      if (!el) return;
+      if (!data.stations || data.stations.length === 0) {
+        el.innerHTML = "";
+        return;
+      }
+      const station = data.stations.find(s => s.station === "paris") || data.stations[0];
+      const maj = new Date(station.derniere_maj).toLocaleTimeString("fr-FR");
+      el.innerHTML = `🟢 NO2 live (${station.station}) : <strong>${station.no2} µg/m³</strong> — maj ${maj}`;
+    } catch (e) {
+      console.warn("Live qualite air indisponible:", e.message);
+    }
+  };
+  refresh();
+  setInterval(refresh, 30000);
 }
 
 // ── Mode switching ────────────────────────────────────────────────────────────
@@ -317,8 +357,8 @@ function updateKPIs() {
       : "donnée indisponible";
 
     const airLabel = air?.no2_moyen != null
-      ? air.no2_moyen < 25 ? "bonne qualité de l’air" : air.no2_moyen < 40 ? "qualité de l’air modérée" : "qualité de l’air dégradée"
-      : "qualité de l’air non disponible";
+      ? air.no2_moyen < 25 ? "bonne qualité de l'air" : air.no2_moyen < 40 ? "qualité de l'air modérée" : "qualité de l'air dégradée"
+      : "qualité de l'air non disponible";
 
     const greenLabel = ev?.m2_par_habitant != null
       ? ev.m2_par_habitant > 10 ? "fort accès aux espaces verts" : ev.m2_par_habitant > 5 ? "accès correct aux espaces verts" : "faible accès aux espaces verts"
@@ -334,7 +374,7 @@ function updateKPIs() {
       <p><strong>${getArrLabel(currentArr)}</strong> affiche un prix médian de <strong>${priceLabel}</strong>.</p>
       <p>📈 Le marché montre ${trendLabel}.</p>
       <p>🌳 Le territoire présente un <strong>${greenLabel}</strong>.</p>
-      <p>🌫️ L’indicateur NO2 signale une <strong>${airLabel}</strong>.</p>
+      <p>🌫️ L'indicateur NO2 signale une <strong>${airLabel}</strong>.</p>
     `;
   }
 
@@ -393,37 +433,44 @@ function updateChart() {
       }
     }
   });
+
+  const prixActuel = prixData.find(d => d.arrondissement === currentArr && d.annee === currentYear);
+  const prixPrecedent = prixData.find(d => d.arrondissement === currentArr && d.annee === currentYear - 1);
+  const evActuel = espacesVertsData.find(d => d.arrondissement === currentArr);
+  const variationActuelle = prixActuel && prixPrecedent
+    ? ((prixActuel.prix_m2_median - prixPrecedent.prix_m2_median) / prixPrecedent.prix_m2_median * 100)
+    : null;
+
   const mainInsight = document.getElementById("main-insight-content");
 
-if (mainInsight) {
+  if (mainInsight) {
+    let insight = "";
 
-  let insight = "";
+    if (prixActuel?.prix_m2_median > 15000) {
+      insight =
+        `🔥 Cet arrondissement appartient au segment <strong>premium</strong> du marché parisien.`;
+    }
 
-  if (prix?.prix_m2_median > 15000) {
-    insight =
-      `🔥 Cet arrondissement appartient au segment <strong>premium</strong> du marché parisien.`;
+    else if (prixActuel?.prix_m2_median > 12000) {
+      insight =
+        `📈 Cet arrondissement présente une <strong>forte valorisation immobilière</strong>.`;
+    }
+
+    else {
+      insight =
+        `🏠 Cet arrondissement reste relativement <strong>accessible</strong> comparé aux secteurs les plus chers de Paris.`;
+    }
+
+    if (variationActuelle != null && variationActuelle > 5) {
+      insight += `<br><br>🚀 Les prix progressent rapidement avec une hausse de <strong>+${variationActuelle.toFixed(1)}%</strong>.`;
+    }
+
+    if (evActuel?.m2_par_habitant > 10) {
+      insight += `<br><br>🌳 Il bénéficie également d'un excellent accès aux espaces verts.`;
+    }
+
+    mainInsight.innerHTML = insight;
   }
-
-  else if (prix?.prix_m2_median > 12000) {
-    insight =
-      `📈 Cet arrondissement présente une <strong>forte valorisation immobilière</strong>.`;
-  }
-
-  else {
-    insight =
-      `🏠 Cet arrondissement reste relativement <strong>accessible</strong> comparé aux secteurs les plus chers de Paris.`;
-  }
-
-  if (variation != null && variation > 5) {
-    insight += `<br><br>🚀 Les prix progressent rapidement avec une hausse de <strong>+${variation.toFixed(1)}%</strong>.`;
-  }
-
-  if (ev?.m2_par_habitant > 10) {
-    insight += `<br><br>🌳 Il bénéficie également d'un excellent accès aux espaces verts.`;
-  }
-
-  mainInsight.innerHTML = insight;
-}
 }
 
 // ── Mode Comparaison ──────────────────────────────────────────────────────────
@@ -663,6 +710,7 @@ async function main() {
   updateChart();
 
   setChoropleth("prix");
+  startLiveAirQuality();
 }
 
 main().catch(err => {
