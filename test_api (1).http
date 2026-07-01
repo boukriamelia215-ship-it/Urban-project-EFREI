@@ -1,0 +1,100 @@
+### ============================================================
+### Urban Data Explorer -- Tests API
+### Clique "Send Request" au-dessus de chaque bloc pour tester
+### ============================================================
+
+### 1. Accueil -- verifie que l'API tourne
+GET https://urban-project-efrei.onrender.com/
+
+### 2. Login admin -- recupere un token JWT (copie le access_token de la reponse)
+POST https://urban-project-efrei.onrender.com/login
+Content-Type: application/x-www-form-urlencoded
+
+username=admin&password=urbanadmin2024
+
+### 3. Login client (role lecture)
+POST https://urban-project-efrei.onrender.com/login
+Content-Type: application/x-www-form-urlencoded
+
+username=client&password=urbanclient2024
+
+### 4. Login avec mauvais mot de passe -- doit renvoyer 401
+POST https://urban-project-efrei.onrender.com/login
+Content-Type: application/x-www-form-urlencoded
+
+username=admin&password=mauvais_mdp
+
+### 5. Prix m2 -- PostgreSQL (Supabase)
+GET https://urban-project-efrei.onrender.com/prix_m2?arrondissement=5&annee=2024
+
+### 6. Logements sociaux -- PostgreSQL
+GET https://urban-project-efrei.onrender.com/logements_sociaux?annee=2024
+
+### 7. Delinquance -- PostgreSQL
+GET https://urban-project-efrei.onrender.com/delinquance?annee=2024
+
+### 8. Densite -- PostgreSQL
+GET https://urban-project-efrei.onrender.com/densite?annee=2024
+
+### 9. Typologie -- PostgreSQL
+GET https://urban-project-efrei.onrender.com/typologie?annee=2024
+
+### 10. Qualite air (historique 2018) -- PostgreSQL
+GET https://urban-project-efrei.onrender.com/qualite_air?arrondissement=5
+
+### 11. Arrondissements -- PostgreSQL (table centrale)
+GET https://urban-project-efrei.onrender.com/arrondissements
+
+### 12. Espaces verts -- MongoDB (NoSQL)
+GET https://urban-project-efrei.onrender.com/espaces_verts?arrondissement=5
+
+### 13. Tous les espaces verts -- MongoDB (sans filtre)
+GET https://urban-project-efrei.onrender.com/espaces_verts
+
+### 14. Qualite air LIVE -- Redis (streaming temps reel)
+GET https://urban-project-efrei.onrender.com/qualite_air/live
+
+### 15. Timeline prix sur un arrondissement
+GET https://urban-project-efrei.onrender.com/timeline?arr=5
+
+### 16. Comparaison entre 2 arrondissements
+GET https://urban-project-efrei.onrender.com/comparaison?arr1=5&arr2=16&annee=2024
+
+### 17. Admin status SANS token -- doit renvoyer 401 (non authentifie)
+GET https://urban-project-efrei.onrender.com/admin/status
+
+### 18. Admin status AVEC token -- remplace TOKEN_ICI par le token recu a l'etape 2
+GET https://urban-project-efrei.onrender.com/admin/status
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4MjU2MTI5N30.Q97DZtzRwndBJEzjaJ37m6buSrbyahw_XXGyNcWn0CM
+
+### 19. Admin cache AVEC token -- montre les tables Postgres en cache
+GET https://urban-project-efrei.onrender.com/admin/cache
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4MjU2MTI5N30.Q97DZtzRwndBJEzjaJ37m6buSrbyahw_XXGyNcWn0CM
+
+### ============================================================
+### INDICATEURS CREATIFS -- toutes protegees par token JWT
+### ============================================================
+
+### 20. Indice Famille -- "adapte pour elever des enfants ?" -- remplace TOKEN_ICI
+GET http://127.0.0.1:8000/indice_famille?arrondissement=12
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4MjYwMTc5OX0._qym-AQVpSKI-TIBjxxB0dRXKKVI5nMBicKCxURI5gg
+
+### 21. Indice Famille -- tous les arrondissements, tries du meilleur au pire
+GET http://127.0.0.1:8000/indice_famille
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4MjYwMTc5OX0._qym-AQVpSKI-TIBjxxB0dRXKKVI5nMBicKCxURI5gg
+
+### 22. Indice Investisseur -- "ou investir pour un bon rendement locatif ?"
+GET http://127.0.0.1:8000/indice_investisseur?arrondissement=2
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4MjYwMTc5OX0._qym-AQVpSKI-TIBjxxB0dRXKKVI5nMBicKCxURI5gg
+
+### 23. Indice Investisseur -- tous les arrondissements
+GET http://127.0.0.1:8000/indice_investisseur
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4MjYwMTc5OX0._qym-AQVpSKI-TIBjxxB0dRXKKVI5nMBicKCxURI5gg
+
+### 24. Indice Respire -- "ou respire-t-on le mieux a Paris ?"
+GET http://127.0.0.1:8000/indice_respire?arrondissement=12
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4MjYwMTc5OX0._qym-AQVpSKI-TIBjxxB0dRXKKVI5nMBicKCxURI5gg
+
+### 25. Indice Respire -- tous les arrondissements
+GET http://127.0.0.1:8000/indice_respire
+Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsInJvbGUiOiJhZG1pbiIsImV4cCI6MTc4MjYwMTc5OX0._qym-AQVpSKI-TIBjxxB0dRXKKVI5nMBicKCxURI5gg
